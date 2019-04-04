@@ -22,6 +22,16 @@ class DBController {
         }
         if(!empty($resultset))
             return $resultset;
+        else
+            return null;
+    }
+
+    function insert($query) {
+        if(mysqli_query($this->conn, $query)) {
+            return mysqli_insert_id($this->conn);
+        } else {
+            return null;
+        }
     }
 
     function numRows($query) {

@@ -1,47 +1,18 @@
 <?php
 session_start();
 require_once("dbconfig.php");
+require_once('mailer/PHPMailer.php');
 $db_handle = new DBController();
-if(!empty($_GET["action"])) {
-    switch($_GET["action"]) {
-        case "add":
-            if(!empty($_POST["quantity"])) {
-                $productByCode = $db_handle->runQuery("SELECT * FROM tblproduct WHERE code='" . $_GET["code"] . "'");
-                $itemArray = array($productByCode[0]["code"]=>array('name'=>$productByCode[0]["name"], 'code'=>$productByCode[0]["code"], 'quantity'=>$_POST["quantity"], 'price'=>$productByCode[0]["price"], 'image'=>$productByCode[0]["image"]));
 
-                if(!empty($_SESSION["cart_item"])) {
-                    if(in_array($productByCode[0]["code"],array_keys($_SESSION["cart_item"]))) {
-                        foreach($_SESSION["cart_item"] as $k => $v) {
-                            if($productByCode[0]["code"] == $k) {
-                                if(empty($_SESSION["cart_item"][$k]["quantity"])) {
-                                    $_SESSION["cart_item"][$k]["quantity"] = 0;
-                                }
-                                $_SESSION["cart_item"][$k]["quantity"] += $_POST["quantity"];
-                            }
-                        }
-                    } else {
-                        $_SESSION["cart_item"] = array_merge($_SESSION["cart_item"],$itemArray);
-                    }
-                } else {
-                    $_SESSION["cart_item"] = $itemArray;
-                }
-            }
-            break;
-        case "remove":
-            if(!empty($_SESSION["cart_item"])) {
-                foreach($_SESSION["cart_item"] as $k => $v) {
-                    if($_GET["code"] == $k)
-                        unset($_SESSION["cart_item"][$k]);
-                    if(empty($_SESSION["cart_item"]))
-                        unset($_SESSION["cart_item"]);
-                }
-            }
-            break;
-        case "empty":
-            unset($_SESSION["cart_item"]);
-            break;
+if(!empty($_POST)) {
+    $bestellingId = $db_handle->insert("INSERT INTO bestelling (voornaam, tussen) VALUES ('".$_POST["voornaam"]."', '".$_POST["tussenvoegsel"]."')");
+    if(!empty($bestellingId)) {
+        foreach($_SESSION["cart_item"] as $item) {
+            $db_handle->insert("INSERT INTO bestel_regel (bestelling_id, product_id, quantity, product_price, total_price) VALUES ('".$bestellingId."', '".$item["product_id"]."')");
+        }
     }
 }
+
 ?>
 <html>
 <head>
@@ -69,32 +40,39 @@ if(!empty($_GET["action"])) {
             <tr>
                 <th style="text-align:left;">Name</th>
                 <th style="text-align:left;">Code</th>
+                <th style="text-align:right;" width="5%">Size</th>
                 <th style="text-align:right;" width="5%">Quantity</th>
                 <th style="text-align:right;" width="10%">Unit Price</th>
                 <th style="text-align:right;" width="10%">Price</th>
-                <th style="text-align:center;" width="5%">Remove</th>
             </tr>
             <?php
-            foreach ($_SESSION["cart_item"] as $item){
-                $item_price = $item["quantity"]*$item["price"];
+            $items = $_SESSION["cart_item"];
+            for($i = 0; $i < sizeof($items); $i++) {
+                $korting = false;
+                if($i > 0) {
+                    $korting = true;
+                }
+
+                $price = $korting ? $items[$i]["price"] * 0.5 : $items[$i]["price"];
+                $item_price = $items[$i]["quantity"] * $price;
                 ?>
                 <tr>
-                    <td><img src="<?php echo $item["image"]; ?>" class="cart-item-image" /><?php echo $item["name"]; ?></td>
-                    <td><?php echo $item["code"]; ?></td>
-                    <td style="text-align:right;"><?php echo $item["quantity"]; ?></td>
-                    <td  style="text-align:right;"><?php echo "$ ".$item["price"]; ?></td>
+                    <td><img src="<?php echo $items[$i]["image"]; ?>" class="cart-item-image" /><?php echo $items[$i]["name"]; ?></td>
+                    <td><?php echo $items[$i]["code"]; ?></td>
+                    <td style="text-align:right;"><?php echo $items[$i]["size"]; ?></td>
+                    <td style="text-align:right;"><?php echo $items[$i]["quantity"]; ?></td>
+                    <td  style="text-align:right;"><?php echo "$ ".$items[$i]["price"]; ?></td>
                     <td  style="text-align:right;"><?php echo "$ ". number_format($item_price,2); ?></td>
-                    <td style="text-align:center;"><a href="index.php?action=remove&code=<?php echo $item["code"]; ?>" class="btnRemoveAction"><img src="icon-delete.png" alt="Remove Item" /></a></td>
                 </tr>
                 <?php
-                $total_quantity += $item["quantity"];
-                $total_price += ($item["price"]*$item["quantity"]);
+                $total_quantity += $items[$i]["quantity"];
+                $total_price += ($items[$i]["price"]*$items[$i]["quantity"]);
             }
 
 
             ?>
             <tr>
-                <td colspan="2" align="right">Total:</td>
+                <td colspan="3" align="right">Total:</td>
                 <td align="right"><?php echo $total_quantity; ?></td>
                 <td align="right" colspan="2"><strong><?php echo "$ ".number_format($total_price, 2); ?></strong></td>
                 <td></td>
@@ -141,7 +119,7 @@ if(!empty($_GET["action"])) {
 
 
 
-                <input type="submit" class="btn btn-success" value="Bestel" formmethod="post"></input>
+                <input type="submit" class="btn btn-success" value="Bestel" formmethod="post" />
             </form>
 </div>
 
